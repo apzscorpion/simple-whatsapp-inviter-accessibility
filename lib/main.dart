@@ -72,7 +72,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   late SharedPreferences _prefs;
   List<Person> _people = [];
   Set<String> _sent = {};
@@ -80,6 +80,7 @@ class _HomePageState extends State<HomePage> {
   bool _whatsAppOnly = true;
   bool _hasWhatsAppAccount = false;
   String? _status = 'Loading…';
+  bool _autoSend = true; // hides the setup banner until checked
 
   String get _cc => _prefs.getString('cc') ?? '91';
   String get _message => (jsonDecode(_prefs.getString('preset') ?? '{}') as Map)['message'] as String? ?? '';
@@ -87,12 +88,30 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _start();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _checkAutoSend(); // back from Accessibility settings
+  }
+
+  Future<void> _checkAutoSend() async {
+    final on = await _channel.invokeMethod<bool>('autoSendOn') ?? false;
+    if (mounted && on != _autoSend) setState(() => _autoSend = on);
   }
 
   Future<void> _start() async {
     _prefs = await SharedPreferences.getInstance();
     _sent = (_prefs.getStringList('sent') ?? []).toSet();
+    _checkAutoSend();
     _refreshPreset(); // background; the cached copy works offline
     await _loadContacts();
   }
@@ -161,19 +180,22 @@ class _HomePageState extends State<HomePage> {
     if (message.isEmpty) return _openSettings();
     final text = fillMessage(message, name);
     final img = await imageFile();
-    final opened = await _channel.invokeMethod<bool>('send', {
+    final outcome = await _channel.invokeMethod<String>('send', {
       'phone': phone,
       'text': text,
       'image': await img.exists() ? img.path : null,
     });
-    if (opened != true) {
+    if (outcome == 'missing') {
       // shortcut: no WhatsApp app found, so the wa.me link sends text only (no image).
       await launchUrl(Uri.parse('https://wa.me/$phone?text=${Uri.encodeComponent(text)}'),
           mode: LaunchMode.externalApplication);
     }
     _sent.add(phone);
     await _prefs.setStringList('sent', _sent.toList());
+    if (!mounted) return;
     setState(() {});
+    if (outcome == 'sent') _say('Sent to ${name.isEmpty ? '+$phone' : name} ✓');
+    if (outcome == 'opened' && _autoSend) _say('Please tap Send in WhatsApp.');
   }
 
   void _say(String s) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s, style: const TextStyle(fontSize: 20))));
@@ -238,6 +260,16 @@ class _HomePageState extends State<HomePage> {
         title: GestureDetector(onLongPress: _openSettings, child: const Text('Send Invitation', style: TextStyle(fontSize: 24))),
       ),
       body: Column(children: [
+        if (!_autoSend)
+          Card(
+            color: Colors.amber.shade100,
+            margin: const EdgeInsets.all(12),
+            child: ListTile(
+              title: const Text('Send without tapping Send', style: TextStyle(fontSize: 18)),
+              subtitle: const Text('One time: tap Turn on, choose "WhatsApp Inviter auto-send", switch it on.', style: TextStyle(fontSize: 15)),
+              trailing: FilledButton(onPressed: () => _channel.invokeMethod('openAutoSendSettings'), child: const Text('Turn on')),
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
           child: TextField(

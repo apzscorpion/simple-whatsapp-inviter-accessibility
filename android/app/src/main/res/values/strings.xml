@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="autosend_description">Presses WhatsApp\'s Send button for you, only right after you tap Invite in this app. It reads nothing else.</string>
+</resources>
