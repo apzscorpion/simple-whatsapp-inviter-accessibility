@@ -28,7 +28,8 @@ type the message (`{name}` becomes the person's name, paste your link in it), **
 You can also edit [preset.json](preset.json) on github.com directly.
 
 ## Install
-Download the APK from [Releases](../../releases) and open it on the phone (allow "Install unknown apps").
+Download `whatsapp-inviter-vX.Y.Z.apk` from [Releases](../../releases) and open it on the phone (allow "Install unknown apps").
+Only if the phone says the app isn't compatible, use the `-old-phones` file instead.
 
 ## Build / release
 ```
