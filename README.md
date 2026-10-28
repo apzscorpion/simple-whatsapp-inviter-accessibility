@@ -13,18 +13,19 @@ Android apps cannot read WhatsApp's own contact list or profile pictures, and ca
 from the phone's contacts; the parent presses Send in WhatsApp. If WhatsApp isn't installed, it falls back
 to a wa.me link (text only).
 
-## Changing the invitation (no app update needed)
-The app reads [preset.json](preset.json) from this repo every time it opens. Nothing to set up on the phone.
+## Changing the invitation (inside the app, no app update)
+**Long-press the "Send Invitation" title** (or tap Invite before anything is set) to open the Invitation screen:
+type the message (`{name}` becomes the person's name, paste your link in it), **Choose picture**, **Save**.
 
-1. **Image:** on github.com open this repo → **Add file → Upload files** → drop the card (e.g. `card.jpg`) → **Commit changes**.
-2. **Message:** open [preset.json](preset.json) → pencil icon (Edit) → change the text → **Commit changes**.
-   - `{name}` becomes the contact's name. Put the link inside the message. `
-` is a new line.
-   - `"image"`: `"https://raw.githubusercontent.com/apzscorpion/simple-whatsapp-inviter-accessibility/main/card.jpg"`,
-     or `""` for no image.
-3. Close and reopen the app on the phone (GitHub can take up to 5 minutes to show the new version).
+- **Only this phone:** that's it.
+- **Every phone, from your own phone:** once, open **Advanced** and paste a GitHub key. From then on Save also
+  updates [preset.json](preset.json) here, and every phone picks it up the next time the app opens.
+  Make the key at github.com → Settings → Developer settings → Fine-grained tokens → Generate:
+  Repository access "Only select repositories" → this repo; Permissions → **Contents: Read and write**.
+  Put the key only on your phone, not your parents'.
+- A change made on the parents' phone stays until the shared invitation changes again.
 
-Advanced: long-press the "Send Invitation" title for Settings (country code, PIN, or a different preset link).
+You can also edit [preset.json](preset.json) on github.com directly.
 
 ## Install
 Download the APK from [Releases](../../releases) and open it on the phone (allow "Install unknown apps").

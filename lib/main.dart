@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -15,8 +16,27 @@ void main() => runApp(const InviterApp());
 
 const _channel = MethodChannel('inviter');
 const _green = Color(0xFF1B7F3B);
-// Edit preset.json on github.com and every phone picks it up the next time the app opens.
-const _defaultPresetUrl = 'https://raw.githubusercontent.com/apzscorpion/simple-whatsapp-inviter-accessibility/main/preset.json';
+const _repo = 'apzscorpion/simple-whatsapp-inviter-accessibility';
+// The API, not raw.githubusercontent.com, so an edit reaches phones at once instead of after a 5-minute CDN cache.
+const _defaultPresetUrl = 'https://api.github.com/repos/$_repo/contents/preset.json';
+
+/// The invitation picture, kept in app files (not cache) so Android never clears a picture chosen on the phone.
+Future<File> imageFile() async => File('${(await getApplicationSupportDirectory()).path}/invite_image');
+
+/// Creates or replaces [path] in the repo; returns the commit sha.
+Future<String> githubPut(String token, String path, List<int> bytes) async {
+  final uri = Uri.parse('https://api.github.com/repos/$_repo/contents/$path');
+  final headers = {'Authorization': 'Bearer $token', 'Accept': 'application/vnd.github+json'};
+  final old = await http.get(uri, headers: headers);
+  final sha = old.statusCode == 200 ? (jsonDecode(old.body) as Map)['sha'] : null;
+  final r = await http.put(uri, headers: headers, body: jsonEncode({
+    'message': 'Update $path from the app',
+    'content': base64Encode(bytes),
+    'sha': ?sha,
+  }));
+  if (r.statusCode >= 300) throw 'GitHub said ${r.statusCode}. Check the key.';
+  return ((jsonDecode(r.body) as Map)['commit'] as Map)['sha'] as String;
+}
 
 class InviterApp extends StatelessWidget {
   const InviterApp({super.key});
@@ -77,28 +97,28 @@ class _HomePageState extends State<HomePage> {
     await _loadContacts();
   }
 
-  Future<File> _imageFile() async => File('${(await getApplicationCacheDirectory()).path}/invite_image');
-
-  /// Fetches {"message": "...", "image": "https://..."} from the preset link set in Settings.
+  /// Fetches {"message": "...", "image": "https://..."} from the preset link (preset.json in the repo by default).
   Future<String> _refreshPreset() async {
     final saved = _prefs.getString('presetUrl') ?? '';
     final url = saved.isEmpty ? _defaultPresetUrl : saved;
     try {
-      final r = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 20));
+      final r = await http.get(Uri.parse(url), headers: {'Accept': 'application/vnd.github.raw'}).timeout(const Duration(seconds: 20));
       if (r.statusCode != 200) return 'Preset link gave ${r.statusCode}';
+      // Unchanged since last time: keep any edit made on this phone.
+      if (r.body == _prefs.getString('lastRemote')) return 'Up to date';
       final preset = jsonDecode(r.body) as Map;
       if (preset['message'] is! String) return 'Preset has no "message"';
-      final img = await _imageFile();
+      final img = await imageFile();
       final imageUrl = preset['image'] as String? ?? '';
       if (imageUrl.isEmpty) {
         if (await img.exists()) await img.delete();
-      } else if (imageUrl != _prefs.getString('imageUrl') || !await img.exists()) {
+      } else {
         final ir = await http.get(Uri.parse(imageUrl)).timeout(const Duration(seconds: 60));
         if (ir.statusCode != 200) return 'Image link gave ${ir.statusCode}';
         await img.writeAsBytes(ir.bodyBytes);
       }
-      await _prefs.setString('imageUrl', imageUrl);
       await _prefs.setString('preset', r.body);
+      await _prefs.setString('lastRemote', r.body);
       if (mounted) setState(() {});
       return 'Updated';
     } catch (e) {
@@ -138,12 +158,9 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _invite(String name, String phone) async {
     final message = _message;
-    if (message.isEmpty) {
-      _say('The invitation is not set up yet.');
-      return;
-    }
+    if (message.isEmpty) return _openSettings();
     final text = fillMessage(message, name);
-    final img = await _imageFile();
+    final img = await imageFile();
     final opened = await _channel.invokeMethod<bool>('send', {
       'phone': phone,
       'text': text,
@@ -203,7 +220,7 @@ class _HomePageState extends State<HomePage> {
       if (ok != true || entered.text != pin) return;
     }
     if (!mounted) return;
-    await Navigator.push(context, MaterialPageRoute(builder: (_) => SettingsPage(prefs: _prefs, refresh: _refreshPreset)));
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => SettingsPage(prefs: _prefs)));
     _sent = (_prefs.getStringList('sent') ?? []).toSet();
     await _loadContacts(); // country code may have changed
   }
@@ -291,54 +308,152 @@ class _InviteButton extends StatelessWidget {
 }
 
 class SettingsPage extends StatefulWidget {
-  const SettingsPage({super.key, required this.prefs, required this.refresh});
+  const SettingsPage({super.key, required this.prefs});
   final SharedPreferences prefs;
-  final Future<String> Function() refresh;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
 }
 
 class _SettingsPageState extends State<SettingsPage> {
+  late final Map _preset = jsonDecode(widget.prefs.getString('preset') ?? '{}') as Map;
+  late final _message = TextEditingController(text: _preset['message'] as String? ?? '');
+  late final _token = TextEditingController(text: widget.prefs.getString('githubToken'));
   late final _url = TextEditingController(text: widget.prefs.getString('presetUrl'));
   late final _cc = TextEditingController(text: widget.prefs.getString('cc') ?? '91');
   late final _pin = TextEditingController(text: widget.prefs.getString('pin'));
+  Uint8List? _image; // what the picture box shows
+  bool _imageChanged = false;
+  bool _busy = false;
   String _result = '';
 
+  @override
+  void initState() {
+    super.initState();
+    imageFile().then((f) async {
+      if (!await f.exists()) return;
+      final bytes = await f.readAsBytes();
+      if (mounted) setState(() => _image = bytes);
+    });
+  }
+
+  Future<void> _pick() async {
+    final x = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1600, imageQuality: 85);
+    if (x == null) return;
+    final bytes = await x.readAsBytes();
+    setState(() {
+      _image = bytes;
+      _imageChanged = true;
+    });
+  }
+
   Future<void> _save() async {
-    await widget.prefs.setString('presetUrl', _url.text.trim());
-    await widget.prefs.setString('cc', _cc.text.replaceAll(RegExp(r'\D'), ''));
-    await widget.prefs.setString('pin', _pin.text.trim());
-    setState(() => _result = 'Saved. Updating…');
-    final r = await widget.refresh();
-    setState(() => _result = r);
+    final prefs = widget.prefs;
+    final token = _token.text.trim();
+    setState(() {
+      _busy = true;
+      _result = 'Saving…';
+    });
+    await prefs.setString('githubToken', token);
+    await prefs.setString('presetUrl', _url.text.trim());
+    await prefs.setString('cc', _cc.text.replaceAll(RegExp(r'\D'), ''));
+    await prefs.setString('pin', _pin.text.trim());
+    final img = await imageFile();
+    var imageUrl = _preset['image'] as String? ?? '';
+    if (_imageChanged) {
+      if (_image != null) {
+        await img.writeAsBytes(_image!);
+      } else if (await img.exists()) {
+        await img.delete();
+      }
+      imageUrl = '';
+    }
+    var result = 'Saved on this phone.';
+    if (token.isNotEmpty) {
+      try {
+        if (_imageChanged && _image != null) {
+          // Pinned to the commit, so phones never get an old cached copy.
+          imageUrl = 'https://raw.githubusercontent.com/$_repo/${await githubPut(token, 'card.jpg', _image!)}/card.jpg';
+        }
+        final body = const JsonEncoder.withIndent('  ').convert({'message': _message.text, 'image': imageUrl});
+        await githubPut(token, 'preset.json', utf8.encode(body));
+        await prefs.setString('lastRemote', body);
+        result = 'Saved. All phones get it next time they open the app.';
+      } catch (e) {
+        result = 'Saved on this phone only. Sending to other phones failed: $e';
+      }
+    }
+    _preset['image'] = imageUrl;
+    await prefs.setString('preset', jsonEncode({'message': _message.text, 'image': imageUrl}));
+    setState(() {
+      _busy = false;
+      _imageChanged = false;
+      _result = result;
+    });
   }
 
   @override
-  Widget build(BuildContext context) {
-    final message = (jsonDecode(widget.prefs.getString('preset') ?? '{}') as Map)['message'] ?? '(none yet)';
-    return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
-      body: ListView(padding: const EdgeInsets.all(16), children: [
-        TextField(controller: _url, decoration: const InputDecoration(labelText: 'Preset link (blank = preset.json in GitHub)')),
-        TextField(controller: _cc, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Country code for 10-digit numbers')),
-        TextField(controller: _pin, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Settings PIN (blank = none)')),
-        const SizedBox(height: 16),
-        FilledButton(onPressed: _save, child: const Text('Save and update now')),
-        const SizedBox(height: 8),
-        Text(_result),
-        const Divider(height: 32),
-        const Text('Current message:', style: TextStyle(fontWeight: FontWeight.bold)),
-        Text('$message', style: const TextStyle(fontSize: 16)),
-        const SizedBox(height: 16),
-        OutlinedButton(
-          onPressed: () async {
-            await widget.prefs.remove('sent');
-            setState(() => _result = 'Sent ticks cleared');
-          },
-          child: const Text('Clear all "Sent" ticks'),
-        ),
-      ]),
-    );
-  }
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('Invitation')),
+        body: ListView(padding: const EdgeInsets.all(16), children: [
+          TextField(
+            controller: _message,
+            minLines: 4,
+            maxLines: 12,
+            style: const TextStyle(fontSize: 18),
+            decoration: const InputDecoration(
+              labelText: 'Message',
+              helperText: '{name} becomes the person\'s name. Paste your link in the message.',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (_image != null) ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.memory(_image!, height: 220, fit: BoxFit.contain)),
+          Row(children: [
+            Expanded(child: OutlinedButton.icon(onPressed: _pick, icon: const Icon(Icons.photo), label: const Text('Choose picture'))),
+            if (_image != null) ...[
+              const SizedBox(width: 8),
+              OutlinedButton(onPressed: () => setState(() {
+                _image = null;
+                _imageChanged = true;
+              }), child: const Text('Remove')),
+            ],
+          ]),
+          const SizedBox(height: 16),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: _green, minimumSize: const Size.fromHeight(56)),
+            onPressed: _busy ? null : _save,
+            child: const Text('Save', style: TextStyle(fontSize: 20)),
+          ),
+          const SizedBox(height: 8),
+          Text(_result, style: const TextStyle(fontSize: 16)),
+          const SizedBox(height: 8),
+          ExpansionTile(
+            title: const Text('Advanced', style: TextStyle(fontSize: 18)),
+            childrenPadding: const EdgeInsets.symmetric(horizontal: 8),
+            children: [
+              TextField(
+                controller: _token,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'GitHub key (only on your phone)',
+                  helperText: 'With a key, Save sends the invitation to every phone.',
+                ),
+              ),
+              TextField(controller: _pin, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'PIN to open this screen (blank = none)')),
+              TextField(controller: _cc, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Country code for 10-digit numbers')),
+              TextField(controller: _url, decoration: const InputDecoration(labelText: 'Preset link (blank = this app\'s GitHub)')),
+              const SizedBox(height: 12),
+              OutlinedButton(
+                onPressed: () async {
+                  await widget.prefs.remove('sent');
+                  setState(() => _result = '"Sent" marks cleared.');
+                },
+                child: const Text('Clear all "Sent" marks'),
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        ]),
+      );
 }
