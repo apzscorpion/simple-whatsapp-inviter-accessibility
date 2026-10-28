@@ -27,6 +27,18 @@ type the message (`{name}` becomes the person's name, paste your link in it), **
 
 You can also edit [preset.json](preset.json) on github.com directly.
 
+## Automatic sending (one-time setup on each phone)
+With this on, tapping Invite sends by itself: WhatsApp flashes for a second, the app presses Send, and you're back
+on the list with the person marked ✓ Sent.
+
+1. Tap **Turn on** in the yellow box (or Settings → Accessibility → Installed apps).
+2. Choose **WhatsApp Inviter auto-send** → switch it on → Allow.
+3. Android 13+ may grey it out as a "restricted setting" (apps not from the Play Store). Then: Settings → Apps →
+   WhatsApp Inviter → ⋮ (top right) → **Allow restricted settings**, and repeat step 2.
+
+It only acts within 15 seconds after an Invite tap, and never sooner than 1 second, so it can't send into a chat that was already open.
+If it can't find WhatsApp's Send button, it leaves WhatsApp open for a normal tap.
+
 ## Install
 Download `whatsapp-inviter-vX.Y.Z.apk` from [Releases](../../releases) and open it on the phone (allow "Install unknown apps").
 Only if the phone says the app isn't compatible, use the `-old-phones` file instead.
