@@ -15,6 +15,8 @@ void main() => runApp(const InviterApp());
 
 const _channel = MethodChannel('inviter');
 const _green = Color(0xFF1B7F3B);
+// Edit preset.json on github.com and every phone picks it up the next time the app opens.
+const _defaultPresetUrl = 'https://raw.githubusercontent.com/apzscorpion/simple-whatsapp-inviter-accessibility/main/preset.json';
 
 class InviterApp extends StatelessWidget {
   const InviterApp({super.key});
@@ -79,8 +81,8 @@ class _HomePageState extends State<HomePage> {
 
   /// Fetches {"message": "...", "image": "https://..."} from the preset link set in Settings.
   Future<String> _refreshPreset() async {
-    final url = _prefs.getString('presetUrl') ?? '';
-    if (url.isEmpty) return 'No preset link set';
+    final saved = _prefs.getString('presetUrl') ?? '';
+    final url = saved.isEmpty ? _defaultPresetUrl : saved;
     try {
       final r = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 20));
       if (r.statusCode != 200) return 'Preset link gave ${r.statusCode}';
@@ -318,7 +320,7 @@ class _SettingsPageState extends State<SettingsPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(padding: const EdgeInsets.all(16), children: [
-        TextField(controller: _url, decoration: const InputDecoration(labelText: 'Preset link (raw JSON)')),
+        TextField(controller: _url, decoration: const InputDecoration(labelText: 'Preset link (blank = preset.json in GitHub)')),
         TextField(controller: _cc, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Country code for 10-digit numbers')),
         TextField(controller: _pin, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Settings PIN (blank = none)')),
         const SizedBox(height: 16),
