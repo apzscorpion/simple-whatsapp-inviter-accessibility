@@ -63,8 +63,11 @@ class MainActivity : FlutterActivity() {
             pending = result
             SendService.onSent = {
                 main.postDelayed({
-                    // Back to the list once WhatsApp has taken the message.
-                    startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
+                    // Back to the list once WhatsApp has taken the message. Started from the accessibility
+                    // service because Android 10+ blocks a background activity from bringing itself forward.
+                    val back = Intent(this, MainActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                    (SendService.instance ?: this).startActivity(back)
                     finish("sent")
                 }, 1200)
             }
