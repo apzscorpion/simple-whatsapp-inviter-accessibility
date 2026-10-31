@@ -58,6 +58,7 @@ class MainActivity : FlutterActivity() {
             }
         }
         val auto = autoSendOn()
+        main.removeCallbacksAndMessages(null) // an earlier invite's timers must not end this one
         finish("opened") // an earlier send still waiting
         if (auto) {
             pending = result
@@ -71,15 +72,24 @@ class MainActivity : FlutterActivity() {
                     finish("sent")
                 }, 1200)
             }
-            SendService.armedAt = SystemClock.elapsedRealtime()
+            SendService.arm()
         }
         for (pkg in SendService.PACKAGES) {
             try {
                 startActivity(intent.setPackage(pkg))
                 if (auto) {
-                    // In case WhatsApp's screen settled before the 1 s guard, with no new events after it.
-                    for (delay in longArrayOf(1300, 2500, 4000)) main.postDelayed({ SendService.instance?.tryClick() }, delay)
-                    main.postDelayed({ finish("opened") }, SendService.TIMEOUT_MS)
+                    // Poll as well as react to events: a warm WhatsApp can settle with no events after the 1 s guard,
+                    // and an old phone can take many seconds to show the chat.
+                    val started = SystemClock.elapsedRealtime()
+                    val poll = object : Runnable {
+                        override fun run() {
+                            if (pending == null) return
+                            if (SystemClock.elapsedRealtime() - started > SendService.TIMEOUT_MS) return finish("opened")
+                            SendService.instance?.tryClick()
+                            main.postDelayed(this, 300)
+                        }
+                    }
+                    main.postDelayed(poll, 1000)
                 } else {
                     result.success("opened")
                 }

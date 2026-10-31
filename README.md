@@ -9,12 +9,12 @@ the invitation card and message already filled in, tap the green **Send**.
 - The message, link and image are set remotely by you, not on the parents' phone.
 
 ## How WhatsApp is involved
-Android apps cannot read WhatsApp's own contact list or profile pictures, and cannot press Send. Photos come
-from the phone's contacts; the parent presses Send in WhatsApp. If WhatsApp isn't installed, it falls back
-to a wa.me link (text only).
+Android apps cannot read WhatsApp's own contact list or profile pictures. Photos come from the phone's contacts.
+Send is pressed by the auto-send service (below); without it the parent taps Send in WhatsApp. If WhatsApp isn't
+installed, it falls back to a wa.me link (text only).
 
 ## Changing the invitation (inside the app, no app update)
-**Long-press the "Send Invitation" title** (or tap Invite before anything is set) to open the Invitation screen:
+Tap the **⚙** button (top right) (or tap Invite before anything is set) to open the Invitation screen:
 type the message (`{name}` becomes the person's name, paste your link in it), **Choose picture**, **Save**.
 
 - **Only this phone:** that's it.

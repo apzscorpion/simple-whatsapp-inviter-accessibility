@@ -9,10 +9,11 @@ String? normalizePhone(String raw, String countryCode) {
   return d.length > 10 && d.length <= 15 ? d : null;
 }
 
-/// {name} = the person's name as saved. Markdown pasted from elsewhere (**bold**, __x__, [text](link))
-/// would show its marks in WhatsApp, so it is stripped.
+/// {name} = the person's name as saved. WhatsApp's own marks (*bold*, _italic_, ~strike~) pass through;
+/// Markdown pasted from elsewhere (**bold**, __italic__, [text](link)) is turned into them, since WhatsApp
+/// would show its marks as plain characters.
 String fillMessage(String template, String name) => template
     .replaceAll('{name}', name.trim())
     .replaceAllMapped(RegExp(r'\[([^\]]+)\]\(([^)\s]+)\)'), (m) => m[1] == m[2] ? m[2]! : '${m[1]} ${m[2]}')
-    .replaceAll('**', '')
-    .replaceAll('__', '');
+    .replaceAllMapped(RegExp(r'\*\*(.+?)\*\*'), (m) => '*${m[1]!.trim()}*')
+    .replaceAllMapped(RegExp(r'__(.+?)__'), (m) => '_${m[1]!.trim()}_');

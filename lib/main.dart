@@ -256,8 +256,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         .toList();
     return Scaffold(
       appBar: AppBar(
-        // Settings hide behind a long press so a stray tap can't change the invitation.
-        title: GestureDetector(onLongPress: _openSettings, child: const Text('Send Invitation', style: TextStyle(fontSize: 24))),
+        title: const Text('Send Invitation', style: TextStyle(fontSize: 24)),
+        actions: [IconButton(onPressed: _openSettings, icon: const Icon(Icons.settings), tooltip: 'Invitation settings')],
       ),
       body: Column(children: [
         if (!_autoSend)
@@ -435,7 +435,8 @@ class _SettingsPageState extends State<SettingsPage> {
             style: const TextStyle(fontSize: 18),
             decoration: const InputDecoration(
               labelText: 'Message',
-              helperText: '{name} becomes the person\'s name. Paste your link in the message.',
+              helperText: 'Like WhatsApp: *bold*  _italic_  ~strike~. Links work as typed.\n{name} becomes the person\'s name.',
+              helperMaxLines: 3,
               border: OutlineInputBorder(),
             ),
           ),

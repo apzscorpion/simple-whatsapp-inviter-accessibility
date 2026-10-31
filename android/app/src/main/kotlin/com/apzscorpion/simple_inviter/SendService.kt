@@ -26,12 +26,22 @@ class SendService : AccessibilityService() {
         val now = SystemClock.elapsedRealtime()
         // Not before 1 s: until then the screen may still be a chat that was already open.
         if (now < armedAt + 1000 || now > armedAt + TIMEOUT_MS) return
-        val root = rootInActiveWindow ?: return
-        if (root.packageName?.toString() !in PACKAGES) return
-        val button = findSend(root) ?: return
-        if (!button.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return
-        armedAt = 0
-        onSent?.invoke()
+        // Every WhatsApp window, not just the active one: a keyboard or popup can hold focus.
+        val roots = windows.mapNotNull { it.root }.ifEmpty { listOfNotNull(rootInActiveWindow) }
+            .filter { it.packageName?.toString() in PACKAGES }
+        if (roots.isEmpty()) return
+        val button = roots.firstNotNullOfOrNull { findSend(it) }
+        if (button == null) {
+            // Send button gone after our tap: WhatsApp took the message.
+            if (lastClick > 0) {
+                armedAt = 0
+                onSent?.invoke()
+            }
+            return
+        }
+        // A tap on a stale view can report success yet do nothing, so tap again if Send is still there.
+        if (now - lastClick < 800) return
+        if (button.performAction(AccessibilityNodeInfo.ACTION_CLICK)) lastClick = now
     }
 
     private fun findSend(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
@@ -47,6 +57,12 @@ class SendService : AccessibilityService() {
         val PACKAGES = listOf("com.whatsapp", "com.whatsapp.w4b")
         const val TIMEOUT_MS = 15000L
         @Volatile var armedAt = 0L
+        @Volatile var lastClick = 0L
+
+        fun arm() {
+            armedAt = SystemClock.elapsedRealtime()
+            lastClick = 0
+        }
         @Volatile var instance: SendService? = null
         var onSent: (() -> Unit)? = null
     }

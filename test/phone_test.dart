@@ -15,8 +15,9 @@ void main() {
 
   test('fillMessage', () {
     expect(fillMessage('Hi {name}, come!', ' Uppa '), 'Hi Uppa, come!');
-    expect(fillMessage('**Asif** -ഉം __x__', ''), 'Asif -ഉം x');
-    expect(fillMessage('🔗 **Details:** [https://a.app](https://a.app)', ''), '🔗 Details: https://a.app');
+    expect(fillMessage('**Asif** -ഉം __x__', ''), '*Asif* -ഉം _x_');
+    expect(fillMessage('*bold* _it_ ~st~', ''), '*bold* _it_ ~st~');
+    expect(fillMessage('🔗 **Details:** [https://a.app](https://a.app)', ''), '🔗 *Details:* https://a.app');
     expect(fillMessage('[Map](https://m.co/x)', ''), 'Map https://m.co/x');
   });
 }
