@@ -37,14 +37,23 @@ class MainActivity : FlutterActivity() {
                     startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                     result.success(null)
                 }
-                "send" -> send(call.argument<String>("phone")!!, call.argument<String>("text") ?: "", call.argument<String>("image"), result)
+                "send" -> send(
+                    call.argument<String>("phone")!!,
+                    call.argument<String>("text") ?: "",
+                    call.argument<String>("image"),
+                    call.argument<String>("expect") ?: "",
+                    result,
+                )
                 else -> result.notImplemented()
             }
         }
     }
 
-    /** Result: "sent" (pressed Send for them), "opened" (they must tap Send), "missing" (no WhatsApp). */
-    private fun send(phone: String, text: String, image: String?, result: MethodChannel.Result) {
+    /**
+     * Result: "sent" (pressed Send for them), "opened" (auto-send gave up; they must tap Send),
+     * "manual" (auto-send is off; they tap Send), "missing" (no WhatsApp).
+     */
+    private fun send(phone: String, text: String, image: String?, expect: String, result: MethodChannel.Result) {
         val intent = Intent(Intent.ACTION_SEND).apply {
             // "jid" is WhatsApp's unofficial extra that opens this chat directly instead of the chat picker.
             putExtra("jid", "$phone@s.whatsapp.net")
@@ -72,7 +81,7 @@ class MainActivity : FlutterActivity() {
                     finish("sent")
                 }, 1200)
             }
-            SendService.arm()
+            SendService.arm(expect)
         }
         for (pkg in SendService.PACKAGES) {
             try {
@@ -91,7 +100,7 @@ class MainActivity : FlutterActivity() {
                     }
                     main.postDelayed(poll, 1000)
                 } else {
-                    result.success("opened")
+                    result.success("manual")
                 }
                 return
             } catch (_: ActivityNotFoundException) {}

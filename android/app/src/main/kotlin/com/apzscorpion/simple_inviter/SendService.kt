@@ -12,7 +12,8 @@ class SendService : AccessibilityService() {
     }
 
     override fun onDestroy() {
-        instance = null
+        // On a rebind the old copy can be destroyed after the new one connected; don't drop the new one.
+        if (instance === this) instance = null
         super.onDestroy()
     }
 
@@ -30,17 +31,25 @@ class SendService : AccessibilityService() {
         val roots = windows.mapNotNull { it.root }.ifEmpty { listOfNotNull(rootInActiveWindow) }
             .filter { it.packageName?.toString() in PACKAGES }
         if (roots.isEmpty()) return
+        // Is our invitation waiting in a typing box (message box or picture caption)? Editable only: once sent,
+        // the same text shows up as a chat bubble, which must not count. null = no text to look for.
+        val waiting = if (expect.isEmpty()) null
+            else roots.any { r -> r.findAccessibilityNodeInfosByText(expect).any { it.isEditable } }
         val button = roots.firstNotNullOfOrNull { findSend(it) }
-        if (button == null) {
-            // Send button gone after our tap: WhatsApp took the message.
-            if (lastClick > 0) {
+        if (lastClick > 0) {
+            // After our tap: sent once the text left the typing box. Not "Send button gone", because
+            // WhatsApp can keep that button on screen (as the microphone) after sending.
+            if (waiting?.not() ?: (button == null)) {
                 armedAt = 0
                 onSent?.invoke()
+                return
             }
-            return
         }
-        // A tap on a stale view can report success yet do nothing, so tap again if Send is still there.
-        if (now - lastClick < 800) return
+        // Only the screen holding our invitation: never press Send on some other chat's draft.
+        if (waiting == false || button == null) return
+        // A tap on a stale view can report success yet do nothing, so tap again if the text is still waiting.
+        // 2.5 s apart: an old phone can keep the picture screen up for a while after a tap that worked.
+        if (lastClick > 0 && now - lastClick < 2500) return
         if (button.performAction(AccessibilityNodeInfo.ACTION_CLICK)) lastClick = now
     }
 
@@ -58,10 +67,12 @@ class SendService : AccessibilityService() {
         const val TIMEOUT_MS = 15000L
         @Volatile var armedAt = 0L
         @Volatile var lastClick = 0L
+        @Volatile var expect = "" // a piece of the invitation text that must be on screen
 
-        fun arm() {
+        fun arm(expectText: String) {
             armedAt = SystemClock.elapsedRealtime()
             lastClick = 0
+            expect = expectText
         }
         @Volatile var instance: SendService? = null
         var onSent: (() -> Unit)? = null

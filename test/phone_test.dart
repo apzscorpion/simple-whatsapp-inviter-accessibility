@@ -13,6 +13,13 @@ void main() {
     expect(normalizePhone('', '91'), null);
   });
 
+  test('sendCheck', () {
+    expect(sendCheck('السلام عليكم ورحمة الله وبركاته\n\nx'), 'السلام عليكم ورحمة ا');
+    expect(sendCheck('*Hi* there friend, come'), 'there friend, come');
+    expect(sendCheck('Hi'), 'Hi');
+    expect(sendCheck(''), '');
+  });
+
   test('fillMessage', () {
     expect(fillMessage('Hi {name}, come!', ' Uppa '), 'Hi Uppa, come!');
     expect(fillMessage('**Asif** -ഉം __x__', ''), '*Asif* -ഉം _x_');

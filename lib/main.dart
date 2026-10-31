@@ -81,6 +81,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool _hasWhatsAppAccount = false;
   String? _status = 'Loading…';
   bool _autoSend = true; // hides the setup banner until checked
+  bool _sending = false;
 
   String get _cc => _prefs.getString('cc') ?? '91';
   String get _message => (jsonDecode(_prefs.getString('preset') ?? '{}') as Map)['message'] as String? ?? '';
@@ -123,8 +124,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     try {
       final r = await http.get(Uri.parse(url), headers: {'Accept': 'application/vnd.github.raw'}).timeout(const Duration(seconds: 20));
       if (r.statusCode != 200) return 'Preset link gave ${r.statusCode}';
-      // Unchanged since last time: keep any edit made on this phone.
-      if (r.body == _prefs.getString('lastRemote')) return 'Up to date';
+      // Unchanged since last time: keep any edit made on this phone. Trimmed because Android's stored copy
+      // comes back with extra whitespace at the end, which made every start look like a new invitation.
+      if (r.body.trim() == (_prefs.getString('lastRemote') ?? '').trim()) return 'Up to date';
       final preset = jsonDecode(r.body) as Map;
       if (preset['message'] is! String) return 'Preset has no "message"';
       final img = await imageFile();
@@ -176,6 +178,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _invite(String name, String phone) async {
+    // One at a time: a second tap mid-send would replace the first and mark the wrong person as sent.
+    if (_sending) return;
+    _sending = true;
+    try {
+      await _inviteNow(name, phone);
+    } finally {
+      _sending = false;
+    }
+  }
+
+  Future<void> _inviteNow(String name, String phone) async {
     final message = _message;
     if (message.isEmpty) return _openSettings();
     final text = fillMessage(message, name);
@@ -184,18 +197,25 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       'phone': phone,
       'text': text,
       'image': await img.exists() ? img.path : null,
+      'expect': sendCheck(text),
     });
     if (outcome == 'missing') {
       // shortcut: no WhatsApp app found, so the wa.me link sends text only (no image).
       await launchUrl(Uri.parse('https://wa.me/$phone?text=${Uri.encodeComponent(text)}'),
           mode: LaunchMode.externalApplication);
     }
+    // "opened" = auto-send gave up (Send not found, or the screen wasn't our invitation), so nothing is known
+    // to have gone out: don't mark it. "manual" = auto-send is off and they tap Send themselves, as before.
+    if (outcome == 'opened') {
+      if (mounted) _say('Not sent automatically. Check WhatsApp and tap Send there.');
+      return;
+    }
+    if (outcome == 'manual') _checkAutoSend(); // it may have been switched off: show the banner
     _sent.add(phone);
     await _prefs.setStringList('sent', _sent.toList());
     if (!mounted) return;
     setState(() {});
     if (outcome == 'sent') _say('Sent to ${name.isEmpty ? '+$phone' : name} ✓');
-    if (outcome == 'opened' && _autoSend) _say('Please tap Send in WhatsApp.');
   }
 
   void _say(String s) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s, style: const TextStyle(fontSize: 20))));
@@ -265,8 +285,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             color: Colors.amber.shade100,
             margin: const EdgeInsets.all(12),
             child: ListTile(
-              title: const Text('Send without tapping Send', style: TextStyle(fontSize: 18)),
-              subtitle: const Text('One time: tap Turn on, choose "WhatsApp Inviter auto-send", switch it on.', style: TextStyle(fontSize: 15)),
+              title: const Text('Automatic sending is OFF', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              subtitle: const Text(
+                'Tap Turn on → "WhatsApp Inviter auto-send" → On.\nAndroid turns it off after an app update or when the app is cleared from recent apps.',
+                style: TextStyle(fontSize: 15),
+              ),
               trailing: FilledButton(onPressed: () => _channel.invokeMethod('openAutoSendSettings'), child: const Text('Turn on')),
             ),
           ),

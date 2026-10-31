@@ -9,6 +9,14 @@ String? normalizePhone(String raw, String countryCode) {
   return d.length > 10 && d.length <= 15 ? d : null;
 }
 
+/// A piece of [text] that auto-send must find on WhatsApp's screen before pressing Send: the first stretch of
+/// 6+ characters with no formatting marks, since WhatsApp may style or hide those marks. Empty = nothing to check.
+String sendCheck(String text) {
+  final parts = text.split(RegExp(r'[*_~\n]')).map((s) => s.trim()).where((s) => s.length >= 6);
+  final p = parts.isEmpty ? text.trim() : parts.first;
+  return p.length > 20 ? p.substring(0, 20) : p;
+}
+
 /// {name} = the person's name as saved. WhatsApp's own marks (*bold*, _italic_, ~strike~) pass through;
 /// Markdown pasted from elsewhere (**bold**, __italic__, [text](link)) is turned into them, since WhatsApp
 /// would show its marks as plain characters.
