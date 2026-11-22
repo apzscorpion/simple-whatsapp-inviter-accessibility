@@ -24,12 +24,12 @@ const _invitationUrl = 'https://api.github.com/repos/apzscorpion/simple-whatsapp
 
 String _clean(String message) => message.replaceAll('\r', '').trim();
 
-/// The invitation built into the app (assets/invitation/: message.txt, and card.jpg if there is one).
+/// The invitation built into the app (assets/invitation/: message.txt, and card.png if there is one).
 /// Used until the first download from the repo works.
 Future<String> builtInInvitation() async {
   final img = await imageFile();
   try {
-    final data = await rootBundle.load('assets/invitation/card.jpg');
+    final data = await rootBundle.load('assets/invitation/card.png');
     await img.writeAsBytes(data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes), flush: true);
   } catch (_) {
     if (await img.exists()) await img.delete(); // no card in this version
@@ -47,7 +47,7 @@ Future<String?> downloadInvitation() async {
     final m = await get('message.txt');
     final message = m.statusCode == 200 ? _clean(utf8.decode(m.bodyBytes)) : '';
     if (message.isEmpty) return null;
-    final c = await get('card.jpg');
+    final c = await get('card.png');
     final img = await imageFile();
     if (c.statusCode == 200) {
       // Written aside, then swapped in, so a send at this moment never gets half a picture.

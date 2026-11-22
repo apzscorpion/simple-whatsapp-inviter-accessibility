@@ -17,7 +17,7 @@ installed, it falls back to a wa.me link (text only).
 Edit the files on github.com; every phone picks up the change the next time the app opens or comes back to the screen:
 
 - Message: [assets/invitation/message.txt](assets/invitation/message.txt) (`{name}` becomes the person's name; WhatsApp marks like `*bold*` work).
-- Picture (optional): upload `assets/invitation/card.jpg`. Delete it to send text only.
+- Picture (optional): upload `assets/invitation/card.png`. Delete it to send text only.
 
 The phone keeps the last copy it downloaded, so it works offline. A fresh install starts from the copy built into
 the APK until it gets online once. Only changes to the app itself need a new APK.
