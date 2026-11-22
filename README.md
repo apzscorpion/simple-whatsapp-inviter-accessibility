@@ -6,26 +6,20 @@ the invitation card and message already filled in, tap the green **Send**.
 - Lists phone contacts with their photos; "On WhatsApp" shows only people WhatsApp found in the contacts.
 - Search by name, or **Type a number** for someone not saved.
 - ✓ Sent mark per person (stored on the phone).
-- The message, link and image are set remotely by you, not on the parents' phone.
+- The message and picture are built into the app, so they can't get lost on the phone.
 
 ## How WhatsApp is involved
 Android apps cannot read WhatsApp's own contact list or profile pictures. Photos come from the phone's contacts.
 Send is pressed by the auto-send service (below); without it the parent taps Send in WhatsApp. If WhatsApp isn't
 installed, it falls back to a wa.me link (text only).
 
-## Changing the invitation (inside the app, no app update)
-Tap the **⚙** button (top right) (or tap Invite before anything is set) to open the Invitation screen:
-type the message (`{name}` becomes the person's name, paste your link in it), **Choose picture**, **Save**.
+## Changing the invitation
+The invitation is built into the app, so nothing is set up on the parents' phone:
 
-- **Only this phone:** that's it.
-- **Every phone, from your own phone:** once, open **Advanced** and paste a GitHub key. From then on Save also
-  updates [preset.json](preset.json) here, and every phone picks it up the next time the app opens.
-  Make the key at github.com → Settings → Developer settings → Fine-grained tokens → Generate:
-  Repository access "Only select repositories" → this repo; Permissions → **Contents: Read and write**.
-  Put the key only on your phone, not your parents'.
-- A change made on the parents' phone stays until the shared invitation changes again.
+- Message: [assets/invitation/message.txt](assets/invitation/message.txt) (`{name}` becomes the person's name; WhatsApp marks like `*bold*` work).
+- Picture (optional): put it at `assets/invitation/card.jpg`.
 
-You can also edit [preset.json](preset.json) on github.com directly.
+Then release a new version (below) and install it.
 
 ## Automatic sending (one-time setup on each phone)
 With this on, tapping Invite sends by itself: WhatsApp flashes for a second, the app presses Send, and you're back
@@ -36,8 +30,8 @@ on the list with the person marked ✓ Sent.
 3. Android 13+ may grey it out as a "restricted setting" (apps not from the Play Store). Then: Settings → Apps →
    WhatsApp Inviter → ⋮ (top right) → **Allow restricted settings**, and repeat step 2.
 
-It only acts within 15 seconds after an Invite tap, and never sooner than 1 second, so it can't send into a chat that was already open.
-If it can't find WhatsApp's Send button, it leaves WhatsApp open for a normal tap.
+It only acts within 30 seconds after an Invite tap, and never sooner than 1 second, so it can't send into a chat that was already open.
+If it can't send, it leaves WhatsApp open for a normal tap and the app says why.
 
 ## Install
 Download `whatsapp-inviter-vX.Y.Z.apk` from [Releases](../../releases) and open it on the phone (allow "Install unknown apps").

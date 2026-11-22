@@ -1,5 +1,6 @@
 package com.apzscorpion.simple_inviter
 
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Intent
@@ -7,6 +8,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
+import android.view.accessibility.AccessibilityManager
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -23,9 +25,15 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun autoSendOn(): Boolean {
-        val me = ComponentName(this, SendService::class.java).flattenToString()
+        if (SendService.instance != null) return true
+        // Phones store the name long ("pkg/pkg.SendService") or short ("pkg/.SendService"): compare parsed names,
+        // not text, or auto-send looks off while it is on and never gets armed.
+        val me = ComponentName(this, SendService::class.java)
         val on = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: ""
-        return on.split(':').any { it.equals(me, ignoreCase = true) }
+        if (on.split(':').any { ComponentName.unflattenFromString(it.trim()) == me }) return true
+        val am = getSystemService(ACCESSIBILITY_SERVICE) as AccessibilityManager
+        return am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+            .any { it.resolveInfo.serviceInfo.let { s -> s.packageName == packageName && s.name == me.className } }
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -50,7 +58,7 @@ class MainActivity : FlutterActivity() {
     }
 
     /**
-     * Result: "sent" (pressed Send for them), "opened" (auto-send gave up; they must tap Send),
+     * Result: "sent" (pressed Send for them), "opened:<why>" (auto-send gave up; they must tap Send),
      * "manual" (auto-send is off; they tap Send), "missing" (no WhatsApp).
      */
     private fun send(phone: String, text: String, image: String?, expect: String, result: MethodChannel.Result) {
@@ -93,7 +101,7 @@ class MainActivity : FlutterActivity() {
                     val poll = object : Runnable {
                         override fun run() {
                             if (pending == null) return
-                            if (SystemClock.elapsedRealtime() - started > SendService.TIMEOUT_MS) return finish("opened")
+                            if (SystemClock.elapsedRealtime() - started > SendService.TIMEOUT_MS) return finish("opened:" + if (SendService.instance == null) "service" else SendService.reason)
                             SendService.instance?.tryClick()
                             main.postDelayed(this, 300)
                         }

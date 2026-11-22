@@ -30,7 +30,7 @@ class SendService : AccessibilityService() {
         // Every WhatsApp window, not just the active one: a keyboard or popup can hold focus.
         val roots = windows.mapNotNull { it.root }.ifEmpty { listOfNotNull(rootInActiveWindow) }
             .filter { it.packageName?.toString() in PACKAGES }
-        if (roots.isEmpty()) return
+        if (roots.isEmpty()) return run { reason = "whatsapp" }
         // Is our invitation waiting in a typing box (message box or picture caption)? Editable only: once sent,
         // the same text shows up as a chat bubble, which must not count. null = no text to look for.
         val waiting = if (expect.isEmpty()) null
@@ -46,10 +46,12 @@ class SendService : AccessibilityService() {
             }
         }
         // Only the screen holding our invitation: never press Send on some other chat's draft.
-        if (waiting == false || button == null) return
+        if (waiting == false) return run { reason = "text" }
+        if (button == null) return run { reason = "button" }
         // A tap on a stale view can report success yet do nothing, so tap again if the text is still waiting.
         // 2.5 s apart: an old phone can keep the picture screen up for a while after a tap that worked.
         if (lastClick > 0 && now - lastClick < 2500) return
+        reason = "tap"
         if (button.performAction(AccessibilityNodeInfo.ACTION_CLICK)) lastClick = now
     }
 
@@ -64,7 +66,7 @@ class SendService : AccessibilityService() {
 
     companion object {
         val PACKAGES = listOf("com.whatsapp", "com.whatsapp.w4b")
-        const val TIMEOUT_MS = 15000L
+        const val TIMEOUT_MS = 30000L // old phones can take long to open a chat with a picture
         @Volatile var armedAt = 0L
         @Volatile var lastClick = 0L
         @Volatile var expect = "" // a piece of the invitation text that must be on screen
@@ -73,7 +75,10 @@ class SendService : AccessibilityService() {
             armedAt = SystemClock.elapsedRealtime()
             lastClick = 0
             expect = expectText
+            reason = "whatsapp"
         }
+        /** Why the last try didn't send: whatsapp (screen not seen), text, button, tap. */
+        @Volatile var reason = "whatsapp"
         @Volatile var instance: SendService? = null
         var onSent: (() -> Unit)? = null
     }
