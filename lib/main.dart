@@ -27,7 +27,7 @@ Future<String> loadInvitation() async {
   } catch (_) {
     if (await img.exists()) await img.delete(); // no card in this version
   }
-  return rootBundle.loadString('assets/invitation/message.txt');
+  return (await rootBundle.loadString('assets/invitation/message.txt')).replaceAll('\r', '').trim();
 }
 
 class InviterApp extends StatelessWidget {
