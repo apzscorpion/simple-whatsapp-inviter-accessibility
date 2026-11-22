@@ -17,7 +17,9 @@ const _channel = MethodChannel('inviter');
 const _green = Color(0xFF1B7F3B);
 
 /// The invitation picture, copied out of the app so WhatsApp can be handed it.
-Future<File> imageFile() async => File('${(await getApplicationSupportDirectory()).path}/invite_image');
+// Named .png (card.png is a PNG): older WhatsApp goes by the file name and sent an unnamed picture as a
+// .bin document, which also drops the message.
+Future<File> imageFile() async => File('${(await getApplicationSupportDirectory()).path}/invite.png');
 
 // The API, not raw.githubusercontent.com, so an edit reaches phones at once instead of after a 5-minute cache.
 const _invitationUrl = 'https://api.github.com/repos/apzscorpion/simple-whatsapp-inviter-accessibility/contents/assets/invitation';
@@ -144,7 +146,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _prefs = await SharedPreferences.getInstance();
     _sent = (_prefs.getStringList('sent') ?? []).toSet();
     _checkAutoSend();
-    _message = _prefs.getString('message') ?? await builtInInvitation();
+    _message = _prefs.getString('message') ?? '';
+    // First start, or a picture saved under an older name: use the built-in copy until a download replaces it.
+    if (_message.isEmpty || !await (await imageFile()).exists()) {
+      final builtIn = await builtInInvitation();
+      if (_message.isEmpty) _message = builtIn;
+    }
     _refreshInvitation(); // in the background; the saved copy works offline
     await _loadContacts();
   }
