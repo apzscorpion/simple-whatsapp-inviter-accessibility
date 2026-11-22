@@ -6,20 +6,21 @@ the invitation card and message already filled in, tap the green **Send**.
 - Lists phone contacts with their photos; "On WhatsApp" shows only people WhatsApp found in the contacts.
 - Search by name, or **Type a number** for someone not saved.
 - ✓ Sent mark per person (stored on the phone).
-- The message and picture are built into the app, so they can't get lost on the phone.
+- The message and picture come from this repo and update by themselves; nothing is set up on the phone.
 
 ## How WhatsApp is involved
 Android apps cannot read WhatsApp's own contact list or profile pictures. Photos come from the phone's contacts.
 Send is pressed by the auto-send service (below); without it the parent taps Send in WhatsApp. If WhatsApp isn't
 installed, it falls back to a wa.me link (text only).
 
-## Changing the invitation
-The invitation is built into the app, so nothing is set up on the parents' phone:
+## Changing the invitation (no app update needed)
+Edit the files on github.com; every phone picks up the change the next time the app opens or comes back to the screen:
 
 - Message: [assets/invitation/message.txt](assets/invitation/message.txt) (`{name}` becomes the person's name; WhatsApp marks like `*bold*` work).
-- Picture (optional): put it at `assets/invitation/card.jpg`.
+- Picture (optional): upload `assets/invitation/card.jpg`. Delete it to send text only.
 
-Then release a new version (below) and install it.
+The phone keeps the last copy it downloaded, so it works offline. A fresh install starts from the copy built into
+the APK until it gets online once. Only changes to the app itself need a new APK.
 
 ## Automatic sending (one-time setup on each phone)
 With this on, tapping Invite sends by itself: WhatsApp flashes for a second, the app presses Send, and you're back

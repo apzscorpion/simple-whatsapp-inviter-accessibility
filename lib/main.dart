@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
+import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -17,9 +19,14 @@ const _green = Color(0xFF1B7F3B);
 /// The invitation picture, copied out of the app so WhatsApp can be handed it.
 Future<File> imageFile() async => File('${(await getApplicationSupportDirectory()).path}/invite_image');
 
-/// The invitation is built into the app (assets/invitation/): message.txt, and card.jpg if there is one.
-/// Nothing is typed or downloaded on the phone, so nothing can be lost there.
-Future<String> loadInvitation() async {
+// The API, not raw.githubusercontent.com, so an edit reaches phones at once instead of after a 5-minute cache.
+const _invitationUrl = 'https://api.github.com/repos/apzscorpion/simple-whatsapp-inviter-accessibility/contents/assets/invitation';
+
+String _clean(String message) => message.replaceAll('\r', '').trim();
+
+/// The invitation built into the app (assets/invitation/: message.txt, and card.jpg if there is one).
+/// Used until the first download from the repo works.
+Future<String> builtInInvitation() async {
   final img = await imageFile();
   try {
     final data = await rootBundle.load('assets/invitation/card.jpg');
@@ -27,7 +34,35 @@ Future<String> loadInvitation() async {
   } catch (_) {
     if (await img.exists()) await img.delete(); // no card in this version
   }
-  return (await rootBundle.loadString('assets/invitation/message.txt')).replaceAll('\r', '').trim();
+  return _clean(await rootBundle.loadString('assets/invitation/message.txt'));
+}
+
+/// The same files from the repo, so an edit on github.com reaches every phone without an app update.
+/// Saves the picture and returns the message; null when offline or GitHub didn't answer (keep what we have).
+Future<String?> downloadInvitation() async {
+  Future<http.Response> get(String file) => http
+      .get(Uri.parse('$_invitationUrl/$file'), headers: {'Accept': 'application/vnd.github.raw'})
+      .timeout(const Duration(seconds: 60));
+  try {
+    final m = await get('message.txt');
+    final message = m.statusCode == 200 ? _clean(utf8.decode(m.bodyBytes)) : '';
+    if (message.isEmpty) return null;
+    final c = await get('card.jpg');
+    final img = await imageFile();
+    if (c.statusCode == 200) {
+      // Written aside, then swapped in, so a send at this moment never gets half a picture.
+      final tmp = File('${img.path}.new');
+      await tmp.writeAsBytes(c.bodyBytes, flush: true);
+      await tmp.rename(img.path);
+    } else if (c.statusCode == 404) {
+      if (await img.exists()) await img.delete(); // picture removed from the repo
+    } else {
+      return null;
+    }
+    return message;
+  } catch (_) {
+    return null;
+  }
 }
 
 class InviterApp extends StatelessWidget {
@@ -93,7 +128,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _checkAutoSend(); // back from Accessibility settings
+    if (state != AppLifecycleState.resumed) return;
+    _checkAutoSend(); // back from Accessibility settings
+    // The app can stay open for days: pick up invitation edits when it comes back to the screen. Not while
+    // a send is running, since returning from WhatsApp also lands here.
+    if (!_sending) _refreshInvitation();
   }
 
   Future<void> _checkAutoSend() async {
@@ -105,8 +144,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _prefs = await SharedPreferences.getInstance();
     _sent = (_prefs.getStringList('sent') ?? []).toSet();
     _checkAutoSend();
-    _message = await loadInvitation();
+    _message = _prefs.getString('message') ?? await builtInInvitation();
+    _refreshInvitation(); // in the background; the saved copy works offline
     await _loadContacts();
+  }
+
+  Future<void> _refreshInvitation() async {
+    final m = await downloadInvitation();
+    if (m == null) return;
+    await _prefs.setString('message', m);
+    _message = m;
   }
 
   Future<void> _loadContacts() async {
@@ -349,7 +396,7 @@ class _SettingsPageState extends State<SettingsPage> {
           const SizedBox(height: 8),
           Text(_result, style: const TextStyle(fontSize: 16)),
           const SizedBox(height: 24),
-          const Text('The invitation message and picture are built into this app version.', style: TextStyle(fontSize: 15)),
+          const Text("The invitation comes from the app's GitHub page and updates by itself when the app opens.", style: TextStyle(fontSize: 15)),
         ]),
       );
 }
