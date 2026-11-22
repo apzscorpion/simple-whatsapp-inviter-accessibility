@@ -87,7 +87,7 @@ class MainActivity : FlutterActivity() {
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
                     (SendService.instance ?: this).startActivity(back)
                     finish("sent")
-                }, 1200)
+                }, 400)
             }
             SendService.arm(expect)
         }
@@ -103,10 +103,10 @@ class MainActivity : FlutterActivity() {
                             if (pending == null) return
                             if (SystemClock.elapsedRealtime() - started > SendService.TIMEOUT_MS) return finish("opened:" + if (SendService.instance == null) "service" else SendService.reason)
                             SendService.instance?.tryClick()
-                            main.postDelayed(this, 300)
+                            main.postDelayed(this, 200)
                         }
                     }
-                    main.postDelayed(poll, 1000)
+                    main.postDelayed(poll, 400)
                 } else {
                     result.success("manual")
                 }

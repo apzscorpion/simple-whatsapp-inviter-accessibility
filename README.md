@@ -30,7 +30,7 @@ on the list with the person marked ✓ Sent.
 3. Android 13+ may grey it out as a "restricted setting" (apps not from the Play Store). Then: Settings → Apps →
    WhatsApp Inviter → ⋮ (top right) → **Allow restricted settings**, and repeat step 2.
 
-It only acts within 30 seconds after an Invite tap, and never sooner than 1 second, so it can't send into a chat that was already open.
+It only acts within 30 seconds after an Invite tap, and never sooner than 0.4 seconds, so it can't send into a chat that was already open.
 If it can't send, it leaves WhatsApp open for a normal tap and the app says why.
 
 ## Install

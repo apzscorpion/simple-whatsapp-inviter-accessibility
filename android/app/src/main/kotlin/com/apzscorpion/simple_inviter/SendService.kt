@@ -25,8 +25,8 @@ class SendService : AccessibilityService() {
 
     fun tryClick() {
         val now = SystemClock.elapsedRealtime()
-        // Not before 1 s: until then the screen may still be a chat that was already open.
-        if (now < armedAt + 1000 || now > armedAt + TIMEOUT_MS) return
+        // Not before 0.4 s: until then the screen may still be a chat that was already open (the text check guards too).
+        if (now < armedAt + 400 || now > armedAt + TIMEOUT_MS) return
         // Every WhatsApp window, not just the active one: a keyboard or popup can hold focus.
         val roots = windows.mapNotNull { it.root }.ifEmpty { listOfNotNull(rootInActiveWindow) }
             .filter { it.packageName?.toString() in PACKAGES }
